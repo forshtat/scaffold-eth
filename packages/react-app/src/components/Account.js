@@ -6,9 +6,17 @@ import { Balance, Address } from "."
 import { usePoller } from "../hooks"
 import WalletConnectProvider from "@walletconnect/web3-provider";
 import { Button, Typography } from 'antd';
+import { RelayProvider } from '@opengsn/gsn'
+import WrapperProvider from '@opengsn/gsn/dist/src/common/WrapperProvider'
+const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js')
+
 const { Text } = Typography;
 
 const INFURA_ID = "2717afb6bf164045b5d5468031b93f87"  // MY INFURA_ID, SWAP IN YOURS!
+
+const relayHubAddress = require('../build/gsn/RelayHub.json').address
+const stakeManagerAddress = require('../build/gsn/StakeManager.json').address
+const paymasterAddress = require('../build/gsn/Paymaster.json').address
 
 const web3Modal = new Web3Modal({
   //network: "mainnet", // optional
@@ -28,7 +36,17 @@ export default function Account(props) {
   const createBurnerIfNoAddress = () => {
     if (!props.injectedProvider && props.localProvider){
       if(props.localProvider.connection && props.localProvider.connection.url){
-        props.setInjectedProvider(new ethers.providers.Web3Provider(new BurnerProvider(props.localProvider.connection.url)))
+        const burnerProvider = new BurnerProvider(props.localProvider.connection.url)
+        // We rely on opcodes introduced with Istanbul, and VmSubprovider is run with... Homestead!
+        burnerProvider.addProvider(new RpcSubprovider({ rpcUrl: props.localProvider.connection.url }), 0)
+        const gsnConfig = {
+          relayHubAddress,
+          stakeManagerAddress,
+          paymasterAddress,
+          verbose: true
+        }
+        const gsnProvider = new RelayProvider(burnerProvider, gsnConfig)
+        props.setInjectedProvider(new ethers.providers.Web3Provider(gsnProvider))
       }else if( props.localProvider._network && props.localProvider._network.name ){
         props.setInjectedProvider(new ethers.providers.Web3Provider(new BurnerProvider("https://"+props.localProvider._network.name+".infura.io/v3/"+INFURA_ID)))
       }else{
